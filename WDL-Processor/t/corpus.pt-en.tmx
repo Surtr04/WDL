@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<tmx version="1.4">
+  <header adminlang="EN-US" creationdate="20130905T171141Z" creationtool="XML::TMX::Writer" creationtoolversion="0.25" datatype="plaintext" o-tmf="plain text" segtype="sentence" srclang="pt">
+  </header>
+<body>
+
+<tu><!--1:1-->
+   <tuv lang='pt'><seg>Os problemas de segurança na agência espacial haviam se tornado uma questão permanente para a comunidade de inteligência .</seg></tuv>
+   <tuv lang='en'><seg>NASA ’s security woes had become a tired issue in the intelligence community .</seg></tuv>
+</tu>
+
+<tu><!--1:1-->
+   <tuv lang='pt'><seg>Dois dias antes , mais de 300 fotos de alta resolução de um dos satélites de observação da Terra de propriedade da NASA tinham sido roubadas por hackers que invadiram um banco de dados da agência espacial .</seg></tuv>
+   <tuv lang='en'><seg>Two days previously , more than three hundred high-resolution satellite photos from one of NASA ’s earthobserving satellites had been stolen by hackers out of a NASA database .</seg></tuv>
+</tu>
+
+<tu><!--2:1-->
+   <tuv lang='pt'><seg>As fotos revelavam a localização de uma base militar secreta que os americanos usavam para treinamento na África do Norte . Colocadas à venda no mercado negro , foram compradas por agências de inteligência de países hostis do Oriente Médio .</seg></tuv>
+   <tuv lang='en'><seg>The photos — inadvertently revealing a classified U.S. military training facility in North Africa — had turned up on the black market , where they had been purchased by hostile intelligence agencies in the Middle East .</seg></tuv>
+</tu>
+
+<tu><!--1:1-->
+   <tuv lang='pt'><seg>- Apesar de suas boas intenções - prosseguiu o diretor da CIA , deixando transparecer uma certa contrariedade em sua voz -, a NASA continua sendo uma ameaça à segurança nacional .</seg></tuv>
+   <tuv lang='en'><seg>“ Despite the best of intentions ,” the CIA director said with a weary voice , “ NASA continues to be a threat to national security .</seg></tuv>
+</tu>
+
+</body>
+</tmx>

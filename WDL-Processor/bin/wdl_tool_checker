@@ -1,0 +1,30 @@
+#!/usr/bin/env perl
+
+use strict;
+use warnings;
+use WDL;
+use WDL::Processor;
+use WDL::Processor::Logger;
+use IO::Null;
+
+open (my $null,">","/dev/null");
+
+my $stdout = select ($null);
+
+my $parser = WDL->new();
+my $pdata = $parser->run();
+my $data = $parser->getData();
+
+select ($stdout);
+
+
+foreach ($data->{toolSet}->members) {
+
+    if (qx/which $_/) {
+        WDL::Processor::Logger::toolAvailable($_);
+    }
+    else {
+        WDL::Processor::Logger::toolUnavailable($_);
+    }
+
+}

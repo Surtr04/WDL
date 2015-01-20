@@ -1,0 +1,71 @@
+#!/usr/bin/env perl
+
+use strict;
+use warnings;
+use Data::Dumper;
+use Getopt::Long;
+use WDL;
+use WDL::Processor;
+use WDL::Processor::Sched;
+use WDL::Processor::PrettyPrinter;
+
+my $dump;
+my $prettyPrint;
+my $data;
+my $dry;
+my $log;
+my $rm_perl;
+
+GetOptions(
+    "d" => \$dump,
+    "pp" => \$prettyPrint,
+    "dry" => \$dry,
+    "l" => \$log,
+    "rp" => \$rm_perl,
+
+) or die "Unkown option $!\n";
+
+my $parser = WDL->new();
+my $sched = WDL::Processor::Sched->new();
+$parser->run();
+$data = $parser->getData();
+
+$parser->dump if $dump;
+
+
+if ($prettyPrint) {
+    WDL::Processor::PrettyPrinter::generateTypeGraphViz($data);
+    WDL::Processor::PrettyPrinter::generateGraphGViz($data);
+}
+
+my $done;
+my $proc;
+
+
+if (not $dry) {
+    while (! $done ) {
+       for (sort {$a <=> $b} keys %{$data->{run}}) {
+           if (defined $data->{run}->{$_}->{runAt}) {
+                $proc = $sched->launchSSH($data,$data->{run}->{$_});
+           }
+           else {
+                $proc = $sched->launchLocal($data,$data->{run}->{$_});
+           }
+        }
+        $done = 1 if !%{$data->{run}};
+        sleep(10) unless $done;
+    }
+}
+
+$proc->wait if defined $proc;
+
+$parser->dump if $dump;
+$data->genLog if $log;
+
+if ($rm_perl) {
+
+    foreach (@{WDL::Processor::Sched::perl_files}) {
+        unlink $_;
+    }
+
+}

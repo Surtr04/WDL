@@ -1,0 +1,249 @@
+%{
+
+use strict;
+use warnings;
+use WDL::Processor;
+use Data::Dumper;
+
+my $data = WDL::Processor->new();
+our $counter = 1;
+my $parameters = {};
+
+%}
+
+
+%token STRING
+%token INT
+%token ID
+%token BOPEN
+%token BCLOSE
+%token POPEN
+%token PCLOSE
+%token BASHINIT
+%token PERLBEGIN
+#%token PERLEND 
+%token PERLCODE
+
+%%
+
+wdl: wdlSpecs { $data->prepareRun(); }
+   ;
+
+wdlSpecs :
+         | wdlSpecs wdlSpec
+         ;
+
+wdlSpec : '%mach' machDefs
+        | '%tools' toolDef
+        | '%tasks' taskSpec {$data->createTask($_[2]);}
+        | comment
+        ;
+
+machDefs: machDef {$data->createMach( %{$_[1]} ); $parameters = {}; }
+        | machDefs machDef { $data->createMach ( %{$_[2]} ); $parameters = {}; }
+        | comment
+        ;
+
+machDef: user'@'host BOPEN machParameters BCLOSE {{ parameters => $parameters, user => $_[1], host => $_[3] };}
+       ;
+
+
+machParameters : machParameter { $_[1] }
+               | machParameters machParameter { $_[2] }
+               |
+               ;
+
+machParameter : 'machType' '=' machType { $parameters->{type} = $_[3] }
+              | 'pass' '=' ID           { $parameters->{pass} = $_[3] }
+              | 'tag' '=' ID            { $parameters->{tag} = $_[3]  }             
+              ;
+
+
+
+machType: ID;
+host: ID;
+user: ID;
+
+toolDef: toolName ':' type tool {$data->createTool($_[1],%{$_[3]},%{$_[4]});}
+       | toolDef toolName ':' type tool {$data->createTool($_[2],%{$_[4]},%{$_[5]});}
+       | comment
+       ;
+
+type: type_id '->' type_id {{st => $_[1], dt => $_[3] };}
+    | '~' type_id '->' type_id {{st => $_[2], dt => $_[4], non_critical => 1 };}
+
+    ;
+
+tool: BOPEN action execAttrs split join BCLOSE { {code => $_[2],split => $_[4], join => $_[5]} }
+   ;
+
+execAttrs :
+          | execAttrs execAttr
+          ;
+
+execAttr: 'wall'   '='  wall
+        | 'gpu'    '='  bool
+        | 'mic'    '='  bool
+        | 'opt'    '='  opt
+        | 'ncores' '='  INT
+        | 'nnodes' '='  INT
+        ;
+
+    action: BASHINIT BOPEN STRING BCLOSE { {bash => $_[3]}; }
+        |   PERLBEGIN PERLCODE { {perl => $_[2]}; }
+        ;
+
+opt:  'guided'
+    | 'learn'
+    | 'no_opt'
+    ;
+
+
+bool: 'true'    {1}
+    | 'false'   {0}
+    ;
+
+
+split: 'split' '=' action { {$_[3]} }
+     |
+     ;
+
+join: 'join' '=' action { {$_[3]} }
+    |
+    ;
+
+
+taskSpec:   {[]}
+        | taskSpec task { [@{$_[1]},$_[2]]  }
+        ;
+
+task: toolName POPEN args PCLOSE runAt { { tool => $_[1], args => $_[3], runAt => $_[5] } }
+    | '#make' POPEN args PCLOSE  runAt { { make => 1, args => $_[3], runAt => $_[5]     } }
+    | '#span' POPEN args PCLOSE  runAt { { span => 1, args => $_[3], runAt => $_[5]     } }
+    ;
+
+
+runAt: '@' ID {$_[2]}
+     |
+     ;
+
+
+args: ID {[$_[1]]}
+    | args ',' ID {[@{$_[1]},$_[3]]}
+    ;
+
+comment : '//' STRING;
+
+toolName: ID {$_[1]};
+wall: INT':'INT':'INT;
+type_id: ID;
+
+
+%%
+
+my $state = 1; # 1-> normal operation; 2-> process strings; 3-> process perl code
+
+sub yyerror {
+  if ($_[0]->YYCurtok) {
+    printf STDERR ('Error: a "%s" ( %s ) was found where %s was expected '."\n",
+                   $_[0]->YYCurtok, $_[0]->YYCurval, $_[0]->YYExpect);
+    print STDERR "File: $ARGV \n";
+    print STDERR ("Remaining File: \n" . $_[0]->YYData->{DATA} );
+
+  } else {
+    print  STDERR "Expecting one of ",join(", ",$_[0]->YYExpect),"\n";
+  }
+}
+
+
+sub lex {
+
+
+    $_[0]->YYData->{DATA} =~ s/^([\s\t\n]+)// ;
+
+    if ($_[0]->YYData->{DATA} eq "") {  #EOF
+        return ('',undef);
+    }
+
+    $_[0]->YYData->{DATA} =~ s/^(\/\/)//                and $state = 2 and return ($1,$1);
+    $_[0]->YYData->{DATA} =~ s/^(=)//                   and return ($1,$1);
+    $_[0]->YYData->{DATA} =~ s/^(split)//               and return ($1,$1);
+    $_[0]->YYData->{DATA} =~ s/^(join)//                and return ($1,$1);
+    $_[0]->YYData->{DATA} =~ s/^(\%mach)//              and return ($1,$1);
+    $_[0]->YYData->{DATA} =~ s/^(\%tasks)//             and return ($1,$1);
+    $_[0]->YYData->{DATA} =~ s/^(\%tools)//             and return ($1,$1);
+    $_[0]->YYData->{DATA} =~ s/^(machType)//            and return ($1,$1);
+    $_[0]->YYData->{DATA} =~ s/^(pass)//                and return ($1,$1);
+    $_[0]->YYData->{DATA} =~ s/^(tag)//                 and return ($1,$1);
+    $_[0]->YYData->{DATA} =~ s/^(#span)//i              and return ($1,$1);
+    $_[0]->YYData->{DATA} =~ s/^(#make)//i              and return ($1,$1);
+    $_[0]->YYData->{DATA} =~ s/^(,)//                   and return ($1,$1);
+    $_[0]->YYData->{DATA} =~ s/^(\@bash)//i             and $state = 2 and return ("BASHINIT",$1);
+    $_[0]->YYData->{DATA} =~ s/^(\@perlbegin)//i        and $state = 3 and return ("PERLBEGIN",$1);
+    $_[0]->YYData->{DATA} =~ s/^(\@perlend)//i          and $state = 1 and return ("PERLEND",$1);
+    $_[0]->YYData->{DATA} =~ s/^(@)//                   and return ($1,$1);
+    $_[0]->YYData->{DATA} =~ s/^(remote\=)//            and return ($1,$1);
+    $_[0]->YYData->{DATA} =~ s/^(true|false)//          and return ($1,$1);
+    $_[0]->YYData->{DATA} =~ s/^(guided|learn|no_opt)// and return ($1,$1);
+    $_[0]->YYData->{DATA} =~ s/^(mic)//                 and return ($1,$1);
+    $_[0]->YYData->{DATA} =~ s/^(ncores)//              and return ($1,$1);
+    $_[0]->YYData->{DATA} =~ s/^(nnodes)//              and return ($1,$1);
+    $_[0]->YYData->{DATA} =~ s/^(gpu)//                 and return ($1,$1);
+    $_[0]->YYData->{DATA} =~ s/^(opt)//                 and return ($1,$1);
+    $_[0]->YYData->{DATA} =~ s/^(->)//                  and return ($1,$1);
+    $_[0]->YYData->{DATA} =~ s/^(\~)//                  and return ($1,$1);
+    $_[0]->YYData->{DATA} =~ s/^(\d+)//                 and return ("INT",$1);
+    
+    if ($state eq 1) {
+        $_[0]->YYData->{DATA} =~ s/^([a-zA-Z0-9\/\.\$\-\_]+)//      and return ("ID", $1);
+    }
+    elsif ($state eq 2) {
+        $_[0]->YYData->{DATA} =~ s/^([a-zA-Z0-9\/ \t\n\-\$\.\~\>\'\=\;\(\)]+)// and $state=1 and return ("STRING",$1);
+    }
+    elsif ($state eq 3) {
+            $_[0]->YYData->{DATA} =~ s/^([a-zA-Z0-9\/\\ \t\n\-\_\$\.\~\>\<\'\=\,\;\(\)\{\}\[\]\|\:\?\@\%\"\+]+)\@perlend//mgi and $state=1 and return ("PERLCODE",$1);
+    }
+    $_[0]->YYData->{DATA} =~ s/^(\{)//                  and return ("BOPEN",$1);
+    $_[0]->YYData->{DATA} =~ s/^(\})//                  and return ("BCLOSE",$1);
+    $_[0]->YYData->{DATA} =~ s/^(\()//                  and return ("POPEN",$1);
+    $_[0]->YYData->{DATA} =~ s/^(\))//                  and return ("PCLOSE",$1);
+    
+
+    $_[0]->YYData->{DATA} =~ s/^([{}\[\]\(\)])//            and return ($1,$1);
+    $_[0]->YYData->{DATA} =~ s/^(:)//                   and return ($1,$1);
+
+    printf STDERR "ERROR : %s : state = %d \n", $_[0]->YYCurtok,$state;
+
+}
+
+
+sub lexDebug {
+
+    my $parser = shift;
+
+    $parser->YYData->{DATA} = join ( "" , <> );
+
+    while (my @x = lex ($parser)) {
+        last if (!defined($x[1]) );
+
+        print "'$x[0]' '$x[1]'\n";
+    }
+    print "LEX DEBUG END\n";
+}
+
+
+sub run {
+    my $parser = shift;
+    #lexDebug($parser);
+    $parser->YYData->{DATA} = join ( "" , <>);
+    $parser->YYParse(yylex => \&lex, yyerror => \&yyerror);
+    #$parser->YYParse(yylex => \&lex, yyerror => \&yyerror, yydebug => 0x1F, yyerror => \&yyerror);
+}
+
+sub getData {
+    return $data;
+}
+
+sub dump {
+    print Dumper $data;
+}
